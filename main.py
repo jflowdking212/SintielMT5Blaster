@@ -9,10 +9,18 @@ Stop with Ctrl+C.
 
 import json
 import logging
+import os
+import sys
 import time
 import traceback
 import warnings
 from datetime import datetime, timezone
+
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)

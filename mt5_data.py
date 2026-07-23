@@ -7,7 +7,14 @@ import base64
 import io
 import json
 import os
+import sys
 from datetime import datetime, timezone
+
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 import MetaTrader5 as mt5
 import pandas as pd

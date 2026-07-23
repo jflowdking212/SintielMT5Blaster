@@ -241,8 +241,13 @@ def _preview(symbol: str, entry_price: float, sl_price: float,
         reward_ratio = config.REWARD_MULTIPLE  # same fallback order_executor uses
 
     reward_usd = round(sizing["actual_risk_usd"] * reward_ratio, 2)
-    note = " (capped by broker max lot)" if sizing["capped_by_volume_max"] else ""
-    return f"Lot: {sizing['lot']}  Risk: ${sizing['actual_risk_usd']:.2f}  Reward: ${reward_usd:.2f}{note}"
+    note = ""
+    if sizing.get("min_lot_override"):
+        note = f"\n   ℹ️ *Auto-adjust*: Configured risk ${risk_amount_usd:.2f} ➔ *Actual Risk: ${sizing['actual_risk_usd']:.2f}* | *Target Reward: ${reward_usd:.2f}*"
+    elif sizing.get("capped_by_volume_max"):
+        note = " (capped by broker max lot)"
+
+    return f"Lot: `{sizing['lot']}`  |  *Risk: ${sizing['actual_risk_usd']:.2f}*  |  *Reward: ${reward_usd:.2f}*{note}"
 
 
 def _format_trade_plan(analysis: dict, summary: dict) -> str:

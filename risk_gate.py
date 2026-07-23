@@ -56,6 +56,19 @@ def should_alert(symbol: str, analysis: dict, open_trades_count: int,
     if open_trades_count >= config.MAX_OPEN_TRADES:
         return False, f"max open trades ({config.MAX_OPEN_TRADES}) reached"
 
+    # Enforce max same-direction open trades per symbol
+    max_same_dir = getattr(config, "MAX_SAME_DIRECTION_TRADES_PER_SYMBOL", 2)
+    try:
+        import MetaTrader5 as mt5
+        positions = mt5.positions_get(symbol=symbol)
+        if positions:
+            target_type = mt5.POSITION_TYPE_BUY if analysis["bias"] == "bullish" else mt5.POSITION_TYPE_SELL
+            same_dir_count = sum(1 for p in positions if p.type == target_type)
+            if same_dir_count >= max_same_dir:
+                return False, f"max open {analysis['bias'].upper()} trades for {symbol} ({max_same_dir}) reached"
+    except Exception:
+        pass
+
     if _alerts_today[symbol] >= config.MAX_DAILY_ALERTS_PER_SYMBOL:
         return False, f"daily alert cap reached for {symbol}"
 

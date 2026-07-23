@@ -56,6 +56,7 @@ POLL_INTERVAL_SECONDS = 60 * 30  # check every 30 minutes; align with your timef
 MIN_CONFIDENCE_TO_ALERT = 0.65   # below this, don't even notify
 MAX_OPEN_TRADES = 3
 MAX_DAILY_ALERTS_PER_SYMBOL = 4
+MAX_SAME_DIRECTION_TRADES_PER_SYMBOL = 2  # max allowed open trades in the same direction on a single symbol
 
 # How long an alert remains interactive in Telegram before timing out (seconds)
 RESPONSE_TIMEOUT_SECONDS = 900   # 15 minutes

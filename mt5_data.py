@@ -51,7 +51,16 @@ def connect():
         if not authorized:
             raise RuntimeError(f"MT5 login failed: {mt5.last_error()}")
 
-    print("Connected to MT5:", mt5.terminal_info())
+    info = mt5.terminal_info()
+    account = mt5.account_info()
+    print("\n" + "=" * 68)
+    print("  🛡️ SENTINEL AI TRADING ASSISTANT -- CONNECTED TO MT5")
+    print("=" * 68)
+    print(f"  • Broker Company : {getattr(info, 'company', 'MT5')}")
+    print(f"  • Account Number : #{getattr(account, 'login', config.MT5_LOGIN)}")
+    print(f"  • Account Server : {getattr(account, 'server', config.MT5_SERVER)}")
+    print(f"  • Account Balance: ${getattr(account, 'balance', 0.0):,.2f}")
+    print("=" * 68 + "\n")
 
 
 def disconnect():

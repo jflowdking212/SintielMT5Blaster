@@ -8,9 +8,15 @@ Stop with Ctrl+C.
 """
 
 import json
+import logging
 import time
 import traceback
+import warnings
 from datetime import datetime, timezone
+
+logging.getLogger("matplotlib").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+warnings.filterwarnings("ignore")
 
 import config
 import mt5_data
@@ -44,7 +50,7 @@ def handle_user_tap(action: str, source: str, symbol: str):
 
     if action == "IGNORE":
         signal_tracker.record_user_action(signal_id, "IGNORE")
-        print(f"[{symbol}] User chose to ignore signal #{signal_id}.")
+        print(f"\n  💬 [Telegram Tap Received] User ignored signal #{signal_id} for {symbol}\n")
         telegram_notifier.clear_pending_alert(symbol)
         return
 
@@ -61,7 +67,6 @@ def handle_user_tap(action: str, source: str, symbol: str):
                 atr_value=summary.get("atr_14"),
                 signal_entry_price=summary.get("last_close"),
             )
-            print(f"[{symbol}] Order placed using Claude's stop-loss (TP mode: {config.TP_MODE}).")
         else:
             result = order_executor.place_order(
                 symbol=symbol,
@@ -69,13 +74,16 @@ def handle_user_tap(action: str, source: str, symbol: str):
                 atr_value=summary.get("atr_14"),
                 signal_entry_price=summary.get("last_close"),
             )
-            print(f"[{symbol}] Order placed using standard ATR-based stop-loss (TP mode: {config.TP_MODE}).")
+
+        print(f"\n  💬 [Telegram Tap Received] User selected: {action} ({source} plan) for {symbol}")
+        print(f"  ✅ [Order Executed] Ticket #{result['order']} | Lot: {result['lot']} | Risk: ${result['actual_risk_usd']:.2f} | Reward: ${result['reward_amount_usd']:.2f}\n")
 
         signal_tracker.record_user_action(signal_id, action, order_ticket=result["order"], plan_source=source)
         log_event({"symbol": symbol, "stage": "order_placed", "action": action, "source": source,
                    "retcode": result["retcode"], "order_id": result["order"],
                    "lot": result["lot"], "actual_risk_usd": result["actual_risk_usd"],
                    "reward_amount_usd": result["reward_amount_usd"]})
+
         # Always send an explicit Order Placed confirmation to Telegram!
         confirm_text = (
             f"✅ *{action} order placed for {symbol}!*\n"
@@ -108,20 +116,20 @@ def handle_user_tap(action: str, source: str, symbol: str):
     except order_executor.StaleSignalError as e:
         signal_tracker.record_user_action(signal_id, action, order_ticket=None, plan_source=source)
         log_event({"symbol": symbol, "stage": "order_rejected_stale", "error": str(e)})
-        print(f"[{symbol}] Stale signal execution blocked: {e}")
+        print(f"\n  ⚠️ [{symbol} Execution Blocked] Stale Signal: {e}\n")
         telegram_notifier.send_plain_message(f"⚠️ {symbol}: {e}")
         telegram_notifier.clear_pending_alert(symbol)
 
     except order_executor.InsufficientRiskAmountError as e:
         signal_tracker.record_user_action(signal_id, action, order_ticket=None, plan_source=source)
         log_event({"symbol": symbol, "stage": "order_rejected_min_risk", "error": str(e)})
-        print(f"[{symbol}] {e}")
+        print(f"\n  ⚠️ [{symbol} Execution Blocked] Insufficient Risk: {e}\n")
         telegram_notifier.send_plain_message(f"⚠️ {symbol}: couldn't place that trade -- {e}")
 
     except Exception as e:
         signal_tracker.record_user_action(signal_id, action, order_ticket=None, plan_source=source)
         log_event({"symbol": symbol, "stage": "order_failed", "error": str(e)})
-        print(f"[{symbol}] Order failed: {e}")
+        print(f"\n  ⚠️ [{symbol} Order Failed] Error: {e}\n")
         telegram_notifier.send_plain_message(f"⚠️ {symbol}: order failed -- {e}")
 
 
@@ -140,22 +148,20 @@ def process_symbol(symbol: str):
                            or symbol in config.CHART_IMAGE_SYMBOLS)
 
     chart_image_b64 = None
+    image_note = ""
     if config.USE_CHART_IMAGE and symbol_wants_image and mt5_data.should_include_chart_image(symbol):
         try:
             chart_image_b64 = mt5_data.render_chart_image(symbol, df, bars=config.CHART_IMAGE_BARS)
             mt5_data.mark_chart_image_sent(symbol)
-            print(f"[{symbol}] Including fresh chart image this cycle.")
+            image_note = " (with Chart Image)"
         except Exception as e:
-            # Chart rendering failing shouldn't block analysis entirely --
-            # fall back to indicator-only analysis for this cycle.
-            print(f"[{symbol}] Chart rendering failed, falling back to indicators only: {e}")
             log_event({"symbol": symbol, "stage": "chart_render_failed", "error": str(e)})
 
     try:
         analysis = claude_analyzer.analyze(summary, chart_image_b64=chart_image_b64)
     except Exception as e:
         log_event({"symbol": symbol, "stage": "claude_analysis", "error": str(e)})
-        print(f"[{symbol}] Claude analysis failed, skipping this cycle: {e}")
+        print(f"\n  [{symbol}] ⚠️ Claude analysis skipped: {e}")
         return  # fail-safe: do nothing on error, never trade blind
 
     # Export signal file for SentinelEA.mq5 on chart display
@@ -180,21 +186,31 @@ def process_symbol(symbol: str):
         "gate_reason": reason,
     })
 
-    if not allowed:
-        print(f"[{symbol}] Gated out: {reason}")
-        return
+    bias = analysis.get("bias", "neutral")
+    bias_icon = "🟢 BULLISH" if bias == "bullish" else ("🔴 BEARISH" if bias == "bearish" else "⚪ NEUTRAL")
+    gate_status = "✅ ALERT SENT TO TELEGRAM" if allowed else f"🛑 FILTERED OUT ({reason})"
 
-    print(f"[{symbol}] Alerting user -- bias={analysis['bias']} confidence={analysis['confidence']:.2f}")
-    telegram_notifier.send_alert(symbol, analysis, summary)
+    print(f"\n  --------------------------------------------------------------------")
+    print(f"  📊 [{symbol}] Technical Analysis ({config.TIMEFRAME} Timeframe){image_note}")
+    print(f"  --------------------------------------------------------------------")
+    print(f"   • Market Price  : {summary.get('last_close')} (ATR: {summary.get('atr_14')}) | Trend: {str(summary.get('higher_tf_trend', 'N/A')).title()}")
+    print(f"   • Claude Bias   : {bias_icon} | Confidence: {analysis['confidence']:.0%} | Structure: {str(analysis.get('structure_quality', 'N/A')).title()}")
+    methods_str = ", ".join(analysis.get("method_used", [])) or "Standard"
+    if analysis.get("pattern_detail"):
+        methods_str += f" ({analysis['pattern_detail']})"
+    print(f"   • Analysis Used : {methods_str}")
+    print(f"   • Gate Decision : {gate_status}")
 
-    # Register alert in pending queue (NON-BLOCKING)
-    telegram_notifier.register_pending_alert(signal_id, symbol, analysis, summary)
+    if allowed:
+        telegram_notifier.send_alert(symbol, analysis, summary)
+        telegram_notifier.register_pending_alert(signal_id, symbol, analysis, summary)
+
+    print(f"  --------------------------------------------------------------------")
 
 
 def main_loop():
     mt5_data.connect()
     telegram_notifier.flush_pending_updates()  # discard stale updates from before this run
-    print(f"Sentinel started. Send /pause, /resume, or /status in Telegram at any time.")
 
     last_analysis_at = 0
     last_outcome_check_at = 0
@@ -215,16 +231,29 @@ def main_loop():
             # 3. Periodically run symbol analysis cycles when interval elapses
             if not bot_state.is_paused() and (now - last_analysis_at >= config.POLL_INTERVAL_SECONDS or last_analysis_at == 0):
                 last_analysis_at = now
-                print(f"\n--- Running market analysis cycle ({datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}) ---")
+                utc_now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+                state_label = "⏸️ PAUSED" if bot_state.is_paused() else "▶️ ACTIVE"
+                open_trades_cnt = order_executor.get_open_trades_count()
+
+                print("\n" + "=" * 68)
+                print(f"  🛡️ SENTINEL MARKET ANALYSIS CYCLE -- {utc_now}")
+                print(f"  • Bot Status : {state_label}")
+                print(f"  • Open Trades: {open_trades_cnt} active position(s)")
+                print(f"  • Watching   : {', '.join(config.SYMBOLS)} ({config.TIMEFRAME} Timeframe)")
+                print("=" * 68)
+
                 for symbol in config.SYMBOLS:
                     if bot_state.is_paused():
-                        print("Paused mid-cycle -- skipping remaining symbols.")
+                        print("\n  ⏸️ Bot paused mid-cycle -- skipping remaining symbols.")
                         break
                     try:
                         process_symbol(symbol)
                     except Exception as e:
-                        print(f"[{symbol}] Unexpected error: {e}")
+                        print(f"\n  [{symbol}] Unexpected error: {e}")
                         traceback.print_exc()
+
+                print(f"\n  ⏳ Cycle complete. Sentinel is listening for Telegram taps or next cycle...")
+                print("=" * 68 + "\n")
 
             # 4. Periodically run outcome evaluations (every 10 minutes)
             if not bot_state.is_paused() and (now - last_outcome_check_at >= 600 or last_outcome_check_at == 0):
@@ -237,7 +266,7 @@ def main_loop():
             time.sleep(TICK_INTERVAL)
 
     except KeyboardInterrupt:
-        print("Stopped by user.")
+        print("\nStopped by user.")
     finally:
         mt5_data.disconnect()
 

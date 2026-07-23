@@ -333,3 +333,28 @@ compared 1:1 against your other trades.
 - Add the MT5 Expert Advisor (MQL5) that mirrors these alerts directly
   on-chart, for when you're at your desk and prefer working from the
   MT5 terminal instead of Telegram.
+
+## Packaging & 24/7 Deployment Options
+
+### 1. One-Click Windows Launcher (`setup.bat` & `run.bat`)
+Sentinel includes 1-click Windows helper scripts:
+* Double-click **`setup.bat`**: Automatically verifies Python, installs all `requirements.txt` packages, and sets up `.env`.
+* Double-click **`run.bat`**: Automatically launches Sentinel in a dedicated terminal window.
+
+### 2. Standalone `.exe` Build (PyInstaller)
+To package Sentinel into a single executable that runs on any Windows PC without needing Python pre-installed:
+```bash
+pip install pyinstaller
+pyinstaller --onefile main.py --name SentinelBot
+```
+The compiled executable will be placed in `dist/SentinelBot.exe`. Place your `.env` file in the same directory as `SentinelBot.exe` and run.
+
+### 3. 24/7 Windows Cloud VPS Deployment (Production)
+For automated 24/7 trading without leaving your laptop on:
+1. Rent a low-cost Windows VPS (e.g. MetaTrader VPS, ForexVPS, or AWS Windows).
+2. Clone your repository:
+   ```bash
+   git clone https://github.com/jflowdking212/SintielMT5Blaster.git
+   ```
+3. Open MT5 on the VPS, log into your broker account, create `.env`, and run `run.bat`.
+4. Add `run.bat` to Windows **Task Scheduler** or use **NSSM** to auto-start Sentinel as a background Windows Service whenever the VPS boots.

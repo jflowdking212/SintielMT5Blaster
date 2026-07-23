@@ -1,0 +1,18 @@
+# Secrets -- never commit this. Copy .env.example to .env instead.
+.env
+
+# Personal trading/signal data -- your own history, not something to share
+signals.db
+bot_log.jsonl
+bot_state.json
+pending_alerts.json
+claude_signal_*.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS clutter
+.DS_Store

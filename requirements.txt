@@ -1,0 +1,8 @@
+MetaTrader5
+pandas
+numpy
+ta
+requests
+mplfinance
+matplotlib
+python-dotenv

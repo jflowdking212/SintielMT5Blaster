@@ -65,6 +65,28 @@ RESPONSE_TIMEOUT_SECONDS = 900   # 15 minutes
 # If current price has moved further than this against the signal, trade execution is blocked.
 MAX_SLIPPAGE_ATR_MULTIPLE = 0.5
 
+# --- Dynamic Trailing Stop ---
+# Automatically trail the stop loss behind profitable open positions on MT5.
+ENABLE_TRAILING_STOP = True   # True to enable automatic trailing stop tracking
+
+# Mode for trailing stop calculations: "ATR" (adaptive to market volatility) or "POINTS" (fixed points)
+TRAILING_STOP_MODE = "ATR"    # "ATR" or "POINTS"
+
+# ATR Mode Parameters:
+# 1. Activation: Trade must move this many ATR multiples into profit before trailing starts
+TRAILING_STOP_ACTIVATION_ATR_MULTIPLE = 1.0  # 1.0x ATR profit required to activate
+
+# 2. Distance: Distance (in ATR multiples) behind current price to set the trailing stop
+TRAILING_STOP_DISTANCE_ATR_MULTIPLE = 1.5    # 1.5x ATR trailing distance
+
+# 3. Step: Minimum move (in ATR multiples) required before modifying SL in MT5
+TRAILING_STOP_STEP_ATR_MULTIPLE = 0.2        # 0.2x ATR step threshold
+
+# Fixed Points Mode Parameters (used if TRAILING_STOP_MODE = "POINTS"):
+TRAILING_STOP_ACTIVATION_POINTS = 150        # e.g. 15 pips (150 points)
+TRAILING_STOP_DISTANCE_POINTS = 200          # e.g. 20 pips (200 points)
+TRAILING_STOP_STEP_POINTS = 50               # e.g. 5 pips (50 points)
+
 # Whether to export claude_signal_<SYMBOL>.json to MT5's MQL5/Files folder for SentinelEA.mq5
 EXPORT_EA_SIGNAL_FILES = True
 

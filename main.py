@@ -231,8 +231,13 @@ def main_loop():
             for action, source, symbol in callbacks:
                 handle_user_tap(action, source, symbol)
 
-            # 2. Check for expired pending alerts
+            # 2. Check for expired pending alerts & update dynamic trailing stops
             telegram_notifier.check_expired_pending_alerts(on_timeout_fn=handle_timeout)
+            if not bot_state.is_paused():
+                try:
+                    order_executor.update_trailing_stops()
+                except Exception as e:
+                    pass
 
             now = time.time()
 

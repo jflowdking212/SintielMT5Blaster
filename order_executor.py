@@ -23,7 +23,9 @@ possibly where the profit target sits too.
 import MetaTrader5 as mt5
 
 import config
+import mt5_data
 import position_sizer
+import telegram_notifier
 from position_sizer import InsufficientRiskAmountError
 
 
@@ -221,3 +223,91 @@ def place_order(symbol: str, action: str,
         "capped_by_volume_max": sizing["capped_by_volume_max"],
         "min_lot_override": sizing["min_lot_override"],
     }
+
+
+def update_trailing_stops():
+    """
+    Scans open MT5 positions and automatically updates the Stop Loss (SL)
+    as trades move into profit, according to config.ENABLE_TRAILING_STOP parameters.
+    """
+    if not getattr(config, "ENABLE_TRAILING_STOP", False):
+        return
+
+    positions = mt5.positions_get()
+    if not positions:
+        return
+
+    for position in positions:
+        symbol = position.symbol
+        symbol_info = mt5.symbol_info(symbol)
+        if not symbol_info:
+            continue
+
+        tick = mt5.symbol_info_tick(symbol)
+        if not tick:
+            continue
+
+        mode = getattr(config, "TRAILING_STOP_MODE", "ATR")
+        digits = symbol_info.digits
+        point = symbol_info.point
+
+        if mode == "ATR":
+            df = mt5_data.get_ohlc(symbol)
+            if df.empty:
+                continue
+            df = mt5_data.compute_indicators(df)
+            atr = df["atr_14"].iloc[-1] if ("atr_14" in df and not df["atr_14"].isna().all()) else (200 * point)
+            activation_dist = atr * getattr(config, "TRAILING_STOP_ACTIVATION_ATR_MULTIPLE", 1.0)
+            trailing_dist = atr * getattr(config, "TRAILING_STOP_DISTANCE_ATR_MULTIPLE", 1.5)
+            step_dist = atr * getattr(config, "TRAILING_STOP_STEP_ATR_MULTIPLE", 0.2)
+        else:
+            activation_dist = getattr(config, "TRAILING_STOP_ACTIVATION_POINTS", 150) * point
+            trailing_dist = getattr(config, "TRAILING_STOP_DISTANCE_POINTS", 200) * point
+            step_dist = getattr(config, "TRAILING_STOP_STEP_POINTS", 50) * point
+
+        pos_type = position.type
+        open_price = position.price_open
+        current_sl = position.sl
+
+        if pos_type == mt5.POSITION_TYPE_BUY:
+            current_price = tick.bid
+            profit_dist = current_price - open_price
+
+            if profit_dist >= activation_dist:
+                target_sl = round(current_price - trailing_dist, digits)
+                is_first_sl = (current_sl == 0)
+                if is_first_sl and target_sl > open_price:
+                    _modify_position_sl(position, target_sl)
+                elif not is_first_sl and target_sl >= current_sl + step_dist:
+                    _modify_position_sl(position, target_sl)
+
+        elif pos_type == mt5.POSITION_TYPE_SELL:
+            current_price = tick.ask
+            profit_dist = open_price - current_price
+
+            if profit_dist >= activation_dist:
+                target_sl = round(current_price + trailing_dist, digits)
+                is_first_sl = (current_sl == 0)
+                if is_first_sl and target_sl < open_price:
+                    _modify_position_sl(position, target_sl)
+                elif not is_first_sl and target_sl <= current_sl - step_dist:
+                    _modify_position_sl(position, target_sl)
+
+
+def _modify_position_sl(position, new_sl: float):
+    request = {
+        "action": mt5.TRADE_ACTION_SLTP,
+        "position": position.ticket,
+        "symbol": position.symbol,
+        "sl": new_sl,
+        "tp": position.tp,
+    }
+    result = mt5.order_send(request)
+    if result and result.retcode == mt5.TRADE_RETCODE_DONE:
+        profit = position.profit
+        msg = f"⚙️ *Trailing Stop Updated* for {position.symbol} (`#{position.ticket}`)\n• New SL: `{new_sl:.5f}`\n• Current Profit: `${profit:+.2f}`"
+        print(f"\n  ⚙️ [Trailing Stop Updated] {position.symbol} (#{position.ticket}): New SL={new_sl:.5f} | Profit=${profit:+.2f}\n")
+        try:
+            telegram_notifier.send_plain_message(msg)
+        except Exception:
+            pass

@@ -76,22 +76,28 @@ def handle_user_tap(action: str, source: str, symbol: str):
                    "retcode": result["retcode"], "order_id": result["order"],
                    "lot": result["lot"], "actual_risk_usd": result["actual_risk_usd"],
                    "reward_amount_usd": result["reward_amount_usd"]})
-        print(f"[{symbol}] Order placed: {action}, lot={result['lot']}, "
-              f"risk=${result['actual_risk_usd']:.2f}, reward=${result['reward_amount_usd']:.2f}")
+        # Always send an explicit Order Placed confirmation to Telegram!
+        confirm_text = (
+            f"✅ *{action} order placed for {symbol}!*\n"
+            f"• Order Ticket: `#{result['order']}`\n"
+            f"• Volume / Lot: `{result['lot']}`\n"
+            f"• Actual Risk: `${result['actual_risk_usd']:.2f}`\n"
+            f"• Target Reward: `${result['reward_amount_usd']:.2f}`"
+        )
+        telegram_notifier.send_plain_message(confirm_text)
 
         if result["capped_by_volume_max"]:
             telegram_notifier.send_plain_message(
-                f"⚠️ {symbol}: position was capped at the broker's maximum lot size -- "
-                f"actual risk on this trade (${result['actual_risk_usd']:.2f}) is higher "
+                f"⚠️ *Note for {symbol}*: position was capped at the broker's maximum lot size -- "
+                f"actual risk (${result['actual_risk_usd']:.2f}) is higher "
                 f"than your configured risk (${result['risk_amount_usd']:.2f})."
             )
 
         if result["min_lot_override"]:
             telegram_notifier.send_plain_message(
-                f"⚠️ {symbol}: your configured risk (${result['risk_amount_usd']:.2f}) was "
+                f"ℹ️ *Note for {symbol}*: your configured risk (${result['risk_amount_usd']:.2f}) was "
                 f"below the broker's minimum lot size, so this trade was auto-adjusted up to "
-                f"the minimum (actual risk: ${result['actual_risk_usd']:.2f}). "
-                f"This trade isn't a clean comparison against normally-sized trades."
+                f"the minimum ({result['lot']} lot, actual risk: ${result['actual_risk_usd']:.2f})."
             )
             log_event({"symbol": symbol, "stage": "min_lot_override",
                        "configured_risk": result["risk_amount_usd"],

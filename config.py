@@ -30,7 +30,7 @@ def _require_env(key: str) -> str:
 
 # --- Anthropic API ---
 ANTHROPIC_API_KEY = _require_env("ANTHROPIC_API_KEY")
-CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6")
+CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-3-7-sonnet-20250219")
 
 # --- Telegram ---
 TELEGRAM_BOT_TOKEN = _require_env("TELEGRAM_BOT_TOKEN")

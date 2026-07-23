@@ -59,6 +59,10 @@ def calculate_lot_size(symbol: str, entry_price: float, stop_loss_price: float,
     with min_lot_override=True so callers can log/notify about it.
     """
     info = mt5.symbol_info(symbol)
+    if info is None or not getattr(info, "visible", False):
+        mt5.symbol_select(symbol, True)
+        info = mt5.symbol_info(symbol)
+
     if info is None:
         raise RuntimeError(f"Symbol {symbol} not found")
 

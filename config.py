@@ -12,7 +12,7 @@ shared -- it's already listed in `.gitignore`.
 import os
 from dotenv import load_dotenv
 
-load_dotenv()  # reads .env in this directory into environment variables
+load_dotenv(override=True)  # reads .env in this directory into environment variables
 
 
 def _require_env(key: str) -> str:
@@ -30,7 +30,7 @@ def _require_env(key: str) -> str:
 
 # --- Anthropic API ---
 ANTHROPIC_API_KEY = _require_env("ANTHROPIC_API_KEY")
-CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-3-5-sonnet-latest")
+CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6")
 
 # --- Telegram ---
 TELEGRAM_BOT_TOKEN = _require_env("TELEGRAM_BOT_TOKEN")
@@ -138,7 +138,7 @@ RISK_PERCENT = 1.0      # used when POSITION_SIZE_MODE = "PERCENT" (e.g. 1.0 = 1
 # True -- automatically bump the trade up to the broker's minimum lot size
 #   instead of blocking, and log that an override happened (so it's
 #   visible later that this trade wasn't sized normally).
-AUTO_ADJUST_TO_MIN_LOT = False
+AUTO_ADJUST_TO_MIN_LOT = True
 
 # --- Take-profit mode ---
 # "NATIVE" (default): use Claude's own suggested take-profit (when you pick
